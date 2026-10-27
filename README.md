@@ -6,6 +6,10 @@ is a port of [EasyPaint](https://github.com/Gr1N/EasyPaint) (via
 [clasqm/EasyPaint](https://github.com/clasqm/EasyPaint), the Qt 5 version
 packaged for Haiku) to Haiku's own interface: no Qt, just the Be/Haiku API.
 
+![EasyPaint on Haiku, with a selection around the tree](screenshots/main-window.png)
+
+![The text tool: the text shows on the image as it's typed](screenshots/text-tool.png)
+
 Features
 --------
 
