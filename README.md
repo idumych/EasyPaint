@@ -6,9 +6,19 @@ is a port of [EasyPaint](https://github.com/Gr1N/EasyPaint) (via
 [clasqm/EasyPaint](https://github.com/clasqm/EasyPaint), the Qt 5 version
 packaged for Haiku) to Haiku's own interface: no Qt, just the Be/Haiku API.
 
-![EasyPaint on Haiku, with a selection around the tree](screenshots/main-window.png)
+## Screenshots
 
-![The text tool: the text shows on the image as it's typed](screenshots/text-tool.png)
+![EasyPaint on Haiku, with a selection around the tree](docs/screenshots/haiku-main-window.png)
+
+Haiku R1/beta6: a selection around the tree, ready to move, scale or copy.
+
+![The text tool on Haiku](docs/screenshots/haiku-text-tool.png)
+
+Haiku: the text tool draws on the image as you type in its window.
+
+![EasyPaint on Linux](docs/screenshots/linux-main-window.png)
+
+Linux (the AppImage, X11): the same picture drawn with the same tools.
 
 Features
 --------
@@ -67,9 +77,12 @@ templates; `haiku-app.env` holds the app's settings for them, and
 
 | Platform | Status |
 |---|---|
-| Haiku R1/beta6 x86_64 | Built and tested by hand: every tool, selections and the clipboard, the effects, the Image menu, zoom, undo, the dialogs, opening and saving PNG and JPEG. Printing and autosave not tried yet. |
+| Haiku R1/beta6 x86_64 (`.hpkg`; installs on Renku OS too) | Release-tested: install, launch, draw, save as PNG and reopen, save as JPEG, quit. Also tried by hand: every tool, selections and the clipboard, the effects, the Image menu, zoom, undo, the dialogs. |
 | Haiku arm64 | Not built yet |
-| Linux (AppImage, Cosmoe) | Not built yet |
+| Linux x86_64 (AppImage) | Release-tested under X11 (Xvfb and Openbox): the same checks as on Haiku. Started under Wayland (headless sway) in CI. |
+| Linux aarch64 (AppImage) | Started under X11 and Wayland on GitHub's arm64 runners; the feature checks weren't run there. |
+
+Printing and autosave haven't been tried on any platform.
 
 Source layout
 -------------
