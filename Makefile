@@ -29,11 +29,11 @@ SRCS     := src/App.cpp src/CanvasView.cpp src/ColorWindow.cpp \
             src/SettingsWindow.cpp src/SizeWindow.cpp src/TextWindow.cpp \
             src/ToolBox.cpp src/Tools.cpp src/core/ImageOps.cpp
 INCLUDES := src src/core
-# Libraries beyond the Haiku API (same on every platform), e.g. -lsqlite3 -lcrypto
-# localestub backs B_TRANSLATE; Haiku and Hokku both ship it.
+# Libraries beyond the Haiku API (same on every platform), e.g. -lsqlite3 -lcrypto.
+# An app that uses B_TRANSLATE needs -llocalestub (Haiku and Hokku both ship it).
 APP_LIBS := -llocalestub
-# The PNG resources the .rdef imports
-ICONS    := $(wildcard icons/*.png)
+# Files the .rdef imports (icons, PNG resources), so changing one rebuilds
+RSRC_DEPS := $(wildcard icons/*.png)
 
 override CXXFLAGS += $(addprefix -I,$(INCLUDES))
 
@@ -88,9 +88,10 @@ obj/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
+# Header dependencies, so editing a header rebuilds what includes it
 -include $(OBJS:.o=.d)
 
-obj/$(NAME).rsrc.o: $(RDEF) $(ICONS)
+obj/$(NAME).rsrc.o: $(RDEF) $(RSRC_DEPS)
 	@mkdir -p obj
 	LD_LIBRARY_PATH=$(COSMOE_ROOT)/lib $(COSMOE_ROOT)/bin/rc -o obj/$(NAME).rsrc $(RDEF)
 	cd obj && ld -r -b binary $(NAME).rsrc -o $(NAME).rsrc.o
@@ -98,7 +99,7 @@ obj/$(NAME).rsrc.o: $(RDEF) $(ICONS)
 		--add-section .note.GNU-stack=/dev/null \
 		--set-section-flags .note.GNU-stack=noload,readonly obj/$(NAME).rsrc.o
 
-$(NAME): $(OBJS) $(EXTRA_OBJS) $(RDEF) $(ICONS)
+$(NAME): $(OBJS) $(EXTRA_OBJS) $(RDEF) $(RSRC_DEPS)
 	@mkdir -p obj
 	$(CXX) $(LDFLAGS) $(OBJS) $(EXTRA_OBJS) -o $@ $(LIBS)
 	$(RESOURCES)
