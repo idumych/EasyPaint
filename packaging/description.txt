@@ -1,0 +1,3 @@
+EasyPaint is a simple bitmap graphics editor, like MS Paint: pen, eraser, line, rectangle, ellipse, Bezier curve, spray, flood fill, text, colour picker and magnifier tools, rectangular selections you can move, scale, cut, copy and paste, a set of effects (gray, negative, binarization, gamma, Gaussian blur, sharpen and a custom 3x3 filter), and image and canvas resizing and rotation.
+
+This version has Haiku's own interface instead of Qt. It opens and saves every image format Haiku's translators support.
