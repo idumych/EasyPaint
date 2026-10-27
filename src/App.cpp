@@ -267,7 +267,8 @@ App::_OpenRef(const entry_ref& ref)
 	BBitmap* image = ImageIO::Load(ref);
 	if (image == NULL) {
 		BString text;
-		text.SetToFormat(B_TRANSLATE("Can't open file \"%s\"."), ref.name);
+		text.SetToFormat(B_TRANSLATE("Can't open file \"%s\"."),
+			ImageIO::LeafName(ref).String());
 		BAlert* alert = new BAlert(B_TRANSLATE("Error opening file"),
 			text.String(), B_TRANSLATE("OK"), NULL, NULL, B_WIDTH_AS_USUAL,
 			B_WARNING_ALERT);

@@ -121,6 +121,18 @@ Load(const entry_ref& ref)
 }
 
 
+BString
+LeafName(const entry_ref& ref)
+{
+	char name[B_FILE_NAME_LENGTH];
+	BEntry entry(&ref);
+	if (entry.GetName(name) == B_OK)
+		return BString(name);
+	const char* slash = strrchr(ref.name, '/');
+	return BString(slash != NULL ? slash + 1 : ref.name);
+}
+
+
 bool
 IsImage(const entry_ref& ref)
 {

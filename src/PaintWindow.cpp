@@ -500,7 +500,7 @@ PaintWindow::_Save()
 		_SaveAs();
 		return;
 	}
-	_SaveTo(directory, fRef.name);
+	_SaveTo(directory, ImageIO::LeafName(fRef).String());
 }
 
 
@@ -517,7 +517,7 @@ PaintWindow::_SaveAs()
 		BEntry parent;
 		if (entry.GetParent(&parent) == B_OK)
 			fSavePanel->SetPanelDirectory(&parent);
-		fSavePanel->SetSaveText(fRef.name);
+		fSavePanel->SetSaveText(ImageIO::LeafName(fRef).String());
 	} else {
 		BString name(B_TRANSLATE("Untitled image"));
 		name << ".png";
@@ -619,7 +619,8 @@ PaintWindow::_OpenEffect(effect_id effect)
 void
 PaintWindow::_UpdateTitle()
 {
-	SetTitle(fHasRef ? fRef.name : B_TRANSLATE("Untitled"));
+	SetTitle(fHasRef ? ImageIO::LeafName(fRef).String()
+		: B_TRANSLATE("Untitled"));
 }
 
 

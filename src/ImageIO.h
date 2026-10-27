@@ -30,6 +30,9 @@ BBitmap*	Load(const entry_ref& ref);
 // an image, otherwise from the name's extension; PNG if neither is known.
 status_t	Save(const BBitmap* bitmap, const entry_ref& directory,
 				const char* name, BString* error);
+// The file's name. entry_ref::name is a full path on Cosmoe, so don't use it
+// for display or to build paths.
+BString		LeafName(const entry_ref& ref);
 // True if a translator can read the file.
 bool		IsImage(const entry_ref& ref);
 
