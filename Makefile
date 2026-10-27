@@ -1,6 +1,6 @@
-# EasyPaint — a native Haiku port of the EasyPaint bitmap editor. Built on Haiku
-# (and Renku OS); the VitruvianOS (V\OS, a BeOS-like OS based on Linux) and
-# Cosmoe branches come from the beos-app-platforms template and are untested.
+# EasyPaint — builds on Haiku and on Linux with Cosmoe from the same sources.
+# Generic beos-app-platforms template: fill in SRCS, the extra LIBS, and the
+# test target; keep the platform branches as they are.
 #
 #   make          -> ./EasyPaint
 #   make test     -> host-side unit tests (any OS, no Haiku API needed)
@@ -8,9 +8,11 @@
 #
 # Contract the packaging scripts rely on:
 #   - `make` leaves the binary at ./$(NAME) and the compiled resources at
-#     obj/$(NAME).rsrc (V\OS, Haiku) or obj/$(NAME).rsrc.o (Cosmoe);
+#     obj/$(NAME).rsrc (Haiku) or obj/$(NAME).rsrc.o (Cosmoe);
 #   - CXXFLAGS/LDFLAGS from the command line ADD to ours (override +=);
-#   - COSMOE_ROOT selects the Cosmoe install.
+#   - COSMOE_ROOT selects the Cosmoe install;
+#   - HAIKU_CROSS=1 (with tools/haiku-arm64's env.sh sourced) cross-compiles for
+#     Haiku arm64.
 
 NAME     := EasyPaint
 RDEF     := EasyPaint.rdef
@@ -18,9 +20,7 @@ CXX      ?= g++
 CXXFLAGS ?= -O2 -g
 override CXXFLAGS += -std=c++17 -Wall -Wno-multichar
 UNAME    := $(shell uname -s)
-VOS_HEADERS ?= /system/develop/headers
 COSMOE_ROOT ?= /usr
-VOS_ARCH := $(if $(filter aarch64,$(shell uname -m)),arm64,$(shell uname -m))
 
 # All .cpp files, with their directories. Header dirs go in INCLUDES.
 SRCS     := src/App.cpp src/CanvasView.cpp src/ColorWindow.cpp \
@@ -29,68 +29,48 @@ SRCS     := src/App.cpp src/CanvasView.cpp src/ColorWindow.cpp \
             src/SettingsWindow.cpp src/SizeWindow.cpp src/TextWindow.cpp \
             src/ToolBox.cpp src/Tools.cpp src/core/ImageOps.cpp
 INCLUDES := src src/core
+# Libraries beyond the Haiku API (same on every platform), e.g. -lsqlite3 -lcrypto
+# localestub backs B_TRANSLATE; Haiku and Hokku both ship it.
+APP_LIBS := -llocalestub
 # The PNG resources the .rdef imports
 ICONS    := $(wildcard icons/*.png)
-# Libraries beyond the Haiku API (same on every platform), e.g. -lsqlite3 -lcrypto
-APP_LIBS :=
 
 override CXXFLAGS += $(addprefix -I,$(INCLUDES))
 
-ifeq ($(UNAME),Haiku)
+ifneq ($(HAIKU_CROSS),)
+  # Haiku arm64, cross-compiled on Linux: . <work>/env.sh from
+  # tools/haiku-arm64/make-sysroot.sh, then make HAIKU_CROSS=1
   PLATFORM     := Haiku
-  LIBS         := -lbe -ltracker -ltranslation -llocalestub $(APP_LIBS)
+  override CXXFLAGS += $(HAIKU_CROSS_CFLAGS)
+  override LDFLAGS  += $(HAIKU_CROSS_LDFLAGS)
+  LIBS         := -lbe -ltracker -ltranslation -lnetwork $(APP_LIBS)
+  RESOURCES     = rc -o obj/$(NAME).rsrc $(RDEF) && xres -o $@ obj/$(NAME).rsrc
+else ifeq ($(UNAME),Haiku)
+  PLATFORM     := Haiku
+  LIBS         := -lbe -ltracker -ltranslation -lnetwork $(APP_LIBS)
   INSTALL_DIR  := $(shell finddir B_USER_NONPACKAGED_DIRECTORY)/apps
   RESOURCES     = rc -o obj/$(NAME).rsrc $(RDEF) && xres -o $@ obj/$(NAME).rsrc
+else ifneq ($(wildcard $(COSMOE_ROOT)/include/os/app/Application.h),)
+  # Plain Linux with Cosmoe (the Haiku API as a library on X11/Wayland)
+  PLATFORM    := Cosmoe
+  COSMOE_DIRS := config os os/app os/game os/interface os/kernel os/locale \
+                 os/media os/net os/storage os/support os/translation \
+                 os/be_apps/Tracker private/interface private/shared \
+                 private/support posix
+  override CXXFLAGS += -I$(COSMOE_ROOT)/include \
+                 $(addprefix -I$(COSMOE_ROOT)/include/,$(COSMOE_DIRS)) \
+                 -DAPP_COSMOE -fPIC
+  # libbe finds Cosmoe's add-ons and data next to itself, so the AppImage
+  # (bin/App + lib/) works wherever it is mounted.
+  COSMOE_RPATH ?= $$ORIGIN/../lib
+  LIBS        := -L$(COSMOE_ROOT)/lib -lbe -ltracker $(APP_LIBS) \
+                 -Wl,-rpath,'$(COSMOE_RPATH)'
+  INSTALL_DIR := $(HOME)/.local/bin
+  # Cosmoe reads resources from a .cosmoe_rsrc section linked into the app
+  EXTRA_OBJS  := obj/$(NAME).rsrc.o
+  RESOURCES    = true
 else
-  ifeq ($(shell pkg-config --exists vos 2>/dev/null && echo yes),yes)
-    # VitruvianOS with vos-dev (pkg-config), or a link-time SDK's env.sh
-    PLATFORM    := VitruvianOS
-    override CXXFLAGS += $(shell pkg-config --cflags vos) -fPIC
-    LIBS        := $(shell pkg-config --libs vos) -ltracker -ltranslation $(APP_LIBS)
-  else ifneq ($(wildcard $(VOS_HEADERS)/os/BeBuild.h),)
-    # VitruvianOS 0.6.x: headers in the system package, no pkg-config
-    PLATFORM    := VitruvianOS
-    VOS_DIRS    := . os os/app os/drivers os/kernel os/support os/storage \
-                   os/translation os/config os/add-ons/file_system \
-                   os/add-ons/graphics os/add-ons/registrar \
-                   os/add-ons/network_settings os/arch/$(VOS_ARCH) os/device \
-                   os/drivers/bus os/game os/interface os/locale \
-                   os/locale/tools os/mail os/net os/posix/compat/sys \
-                   os/add-ons/input_server os/add-ons/tracker os/opengl \
-                   os/media2 posix build build/config_headers config
-    override CXXFLAGS += $(addprefix -I$(VOS_HEADERS)/,$(VOS_DIRS)) \
-                   -include LinuxBuildCompatibility.h -fPIC
-    LIBS        := -lbe -lroot -ltracker -ltranslation $(APP_LIBS)
-  else ifneq ($(wildcard $(COSMOE_ROOT)/include/os/app/Application.h),)
-    # Plain Linux with Cosmoe (the Haiku API as a library on X11/Wayland)
-    PLATFORM    := Cosmoe
-    COSMOE_DIRS := config os os/app os/game os/interface os/kernel os/locale \
-                   os/media os/net os/storage os/support os/translation \
-                   os/be_apps/Tracker private/interface private/shared \
-                   private/support posix
-    override CXXFLAGS += -I$(COSMOE_ROOT)/include \
-                   $(addprefix -I$(COSMOE_ROOT)/include/,$(COSMOE_DIRS)) \
-                   -DAPP_COSMOE -fPIC
-    # libbe finds Cosmoe's add-ons and data next to itself, so the AppImage
-    # (bin/App + lib/) works wherever it is mounted.
-    COSMOE_RPATH ?= $$ORIGIN/../lib
-    LIBS        := -L$(COSMOE_ROOT)/lib -lbe -ltracker $(APP_LIBS) \
-                   -Wl,-rpath,'$(COSMOE_RPATH)'
-    INSTALL_DIR := $(HOME)/.local/bin
-    # Cosmoe reads resources from a .cosmoe_rsrc section linked into the app
-    EXTRA_OBJS  := obj/$(NAME).rsrc.o
-    RESOURCES    = true
-  else
-    PLATFORM    := none
-  endif
-  ifeq ($(PLATFORM),VitruvianOS)
-    INSTALL_DIR := $(or $(shell finddir B_USER_NONPACKAGED_DIRECTORY 2>/dev/null),$(HOME)/config/non-packaged)/apps
-    # V\OS keeps the signature both as resources and as attributes; the
-    # host-built xres/resattr need absolute paths.
-    RESOURCES    = rc -o $(CURDIR)/obj/$(NAME).rsrc $(CURDIR)/$(RDEF) \
-                   && xres -o $(CURDIR)/$@ $(CURDIR)/obj/$(NAME).rsrc \
-                   && resattr -O -o $(CURDIR)/$@ $(CURDIR)/obj/$(NAME).rsrc
-  endif
+  PLATFORM     := none
 endif
 
 OBJS := $(patsubst %.cpp,obj/%.o,$(SRCS))
@@ -99,8 +79,7 @@ all: check-platform $(NAME)
 
 check-platform:
 ifeq ($(PLATFORM),none)
-	@echo "$(NAME) needs Haiku, VitruvianOS, or Linux with Cosmoe."
-	@echo "V\OS: pkg-config vos, or headers in $(VOS_HEADERS)."
+	@echo "$(NAME) needs Haiku, or Linux with Cosmoe."
 	@echo "Linux: Cosmoe installed under COSMOE_ROOT=$(COSMOE_ROOT)."
 	@false
 endif
@@ -125,9 +104,6 @@ $(NAME): $(OBJS) $(EXTRA_OBJS) $(RDEF) $(ICONS)
 	$(RESOURCES)
 	@if command -v mimeset >/dev/null 2>&1; then mimeset -f $@; fi
 
-deb: all
-	sh packaging/build-deb.sh
-
 hpkg:
 	sh packaging/build-hpkg.sh
 
@@ -149,4 +125,4 @@ install: all
 clean:
 	rm -rf obj $(NAME)
 
-.PHONY: all check-platform test install clean deb hpkg
+.PHONY: all check-platform test install clean hpkg

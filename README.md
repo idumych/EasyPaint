@@ -54,17 +54,22 @@ On Haiku (R1/beta6 or newer, or Renku OS), with `haiku_devel` installed:
     make            # builds ./EasyPaint
     make test       # unit tests for the pixel code (any OS)
     make install    # copies it to ~/config/non-packaged/apps
+    make hpkg       # builds easypaint-<version>-<revision>-<arch>.hpkg
 
-`sh tools/haiku-typecheck.sh` type-checks the sources against Haiku's
-headers on a Linux host. `sh packaging/build-hpkg.sh` builds a package on
-Haiku (fill in `PACKAGER` in `haiku-app.env` first).
+The same sources build on Linux against Cosmoe (`make COSMOE_ROOT=<prefix>`),
+which `.github/workflows/appimage.yml` packages as an AppImage, and cross-build
+an arm64 `.hpkg` on Linux (`tools/haiku-arm64/make-sysroot.sh`, then
+`make HAIKU_CROSS=1` and `packaging/build-hpkg-arm64.sh`).
+`sh tools/haiku-typecheck.sh` type-checks the sources against Haiku's headers
+on a Linux host. The packaging and CI files come from the beos-app-platforms
+templates; `haiku-app.env` holds the app's settings for them, and
+`release/test-plan.md` the checks a release must pass.
 
-Tested on Haiku R1/beta6 (x86_64): every tool, selections and the
-clipboard, the effects, the Image menu, zoom, undo, the dialogs, and
-opening and saving PNG and JPEG files. Printing and autosave haven't been
-tried yet. The Makefile also has VitruvianOS and Cosmoe (Linux) branches
-from the beos-app-platforms template; those builds haven't been tried
-either.
+| Platform | Status |
+|---|---|
+| Haiku R1/beta6 x86_64 | Built and tested by hand: every tool, selections and the clipboard, the effects, the Image menu, zoom, undo, the dialogs, opening and saving PNG and JPEG. Printing and autosave not tried yet. |
+| Haiku arm64 | Not built yet |
+| Linux (AppImage, Cosmoe) | Not built yet |
 
 Source layout
 -------------

@@ -1,10 +1,9 @@
 /EasyPaint
 obj/
 dist/
-*.deb
 *.hpkg
 *.AppImage
 .cosmoe/
 .haiku-headers/
-.vos-sdk/
 compile_flags.txt
+.haiku-arm64/
