@@ -107,7 +107,6 @@ PaintWindow::PaintWindow(BRect frame, BBitmap* image, const entry_ref* ref)
 			.End()
 		.Add(new BSeparatorView(B_HORIZONTAL))
 		.Add(fPalette)
-		.Add(new BSeparatorView(B_HORIZONTAL))
 		.Add(_BuildStatusBar());
 
 	fCanvas->MakeFocus(true);
@@ -278,7 +277,7 @@ PaintWindow::MessageReceived(BMessage* message)
 			BPoint where;
 			BString position;
 			if (message->FindPoint("where", &where) == B_OK)
-				position.SetToFormat("%d, %d", (int)where.x, (int)where.y);
+				position.SetToFormat("%d,%d", (int)where.x, (int)where.y);
 			fPositionView->SetText(position.String());
 
 			rgb_color color;
@@ -462,13 +461,14 @@ PaintWindow::_BuildStatusBar()
 		make_color(0, 0, 0), 12);
 	fColorView = new BStringView("color", "");
 
-	float digits = be_plain_font->StringWidth("00000 × 00000");
-	fSizeView->SetExplicitMinSize(BSize(digits, B_SIZE_UNSET));
-	fPositionView->SetExplicitMinSize(BSize(digits, B_SIZE_UNSET));
+	fSizeView->SetExplicitMinSize(BSize(
+		be_plain_font->StringWidth("0000 x 0000"), B_SIZE_UNSET));
+	fPositionView->SetExplicitMinSize(BSize(
+		be_plain_font->StringWidth("0000,0000"), B_SIZE_UNSET));
 
-	BGroupView* statusBar = new BGroupView(B_HORIZONTAL);
+	BGroupView* statusBar = new BGroupView(B_HORIZONTAL, 6);
 	BLayoutBuilder::Group<>(statusBar)
-		.SetInsets(B_USE_SMALL_SPACING, 2, B_USE_SMALL_SPACING, 2)
+		.SetInsets(6, 0, 6, 5)
 		.Add(fSizeView)
 		.Add(fPositionView)
 		.Add(fZoomView)
@@ -639,7 +639,7 @@ void
 PaintWindow::_UpdateStatus()
 {
 	BString size;
-	size.SetToFormat("%" B_PRId32 " × %" B_PRId32, fCanvas->ImageWidth(),
+	size.SetToFormat("%" B_PRId32 " x %" B_PRId32, fCanvas->ImageWidth(),
 		fCanvas->ImageHeight());
 	fSizeView->SetText(size.String());
 

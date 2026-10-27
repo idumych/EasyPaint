@@ -10,15 +10,15 @@
 #include <Button.h>
 #include <Catalog.h>
 #include <LayoutBuilder.h>
-#include <MenuField.h>
-#include <MenuItem.h>
-#include <PopUpMenu.h>
+#include <ControlLook.h>
 #include <SeparatorView.h>
 #include <SpaceLayoutItem.h>
-#include <StringView.h>
 #include <TranslationUtils.h>
 #include <Window.h>
 
+#include <algorithm>
+
+#include "NumberControl.h"
 #include "Settings.h"
 
 
@@ -35,7 +35,7 @@ ColorSwatch::ColorSwatch(kind type, rgb_color color, float size)
 	fKind(type),
 	fColor(color)
 {
-	SetExplicitSize(BSize(size, size));
+	SetExplicitSize(BSize(size - 1, size - 1));
 	SetViewColor(B_TRANSPARENT_COLOR);
 	switch (type) {
 		case SWATCH_PRIMARY:
@@ -68,17 +68,30 @@ void
 ColorSwatch::Draw(BRect updateRect)
 {
 	BRect bounds = Bounds();
+	if (fKind == SWATCH_PALETTE) {
+		// A plain square, as in the original's palette.
+		SetHighColor(fColor);
+		FillRect(bounds);
+		return;
+	}
+
+	// A raised box with the colour inset, like the original's colour
+	// buttons.
 	rgb_color base = ui_color(B_PANEL_BACKGROUND_COLOR);
-	SetHighColor(tint_color(base, B_DARKEN_2_TINT));
-	StrokeLine(bounds.LeftBottom(), bounds.LeftTop());
-	StrokeLine(bounds.RightTop());
-	SetHighColor(tint_color(base, B_LIGHTEN_2_TINT));
-	StrokeLine(bounds.RightBottom());
-	StrokeLine(bounds.LeftBottom());
-	bounds.InsetBy(1, 1);
-	SetHighColor(0, 0, 0);
+	SetHighColor(base);
+	FillRect(bounds);
+	SetHighColor(tint_color(base, B_DARKEN_3_TINT));
 	StrokeRect(bounds);
 	bounds.InsetBy(1, 1);
+	SetHighColor(tint_color(base, B_LIGHTEN_2_TINT));
+	StrokeLine(bounds.LeftBottom(), bounds.LeftTop());
+	StrokeLine(bounds.RightTop());
+	SetHighColor(tint_color(base, B_DARKEN_1_TINT));
+	StrokeLine(bounds.RightBottom());
+	StrokeLine(bounds.LeftBottom());
+
+	float inset = fKind == SWATCH_DISPLAY ? 2 : 4;
+	bounds = Bounds().InsetByCopy(inset, inset);
 	SetHighColor(fColor);
 	FillRect(bounds);
 }
@@ -172,8 +185,81 @@ static const char* kToolIcons[TOOL_COUNT] = {
 	"tool-text"
 };
 
-static const int32 kPenSizes[] = {
-	1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 48
+enum {
+	MSG_PEN_FIELD	= 'pnfd',
+	MSG_PEN_STEP	= 'pnst'	// "delta": int32
+};
+
+static const int32 kMaxPenSize = 50;
+static const float kToolButtonSize = 28;
+
+
+// One button with a minus on its left half and a plus on its right, like
+// the original's spin box.
+class StepperButton : public BView {
+public:
+	StepperButton(BMessage* message)
+		:
+		BView("stepper", B_WILL_DRAW),
+		fMessage(message),
+		fPressedHalf(0)
+	{
+		SetExplicitSize(BSize(23, B_SIZE_UNSET));
+		SetViewColor(B_TRANSPARENT_COLOR);
+	}
+
+	~StepperButton()
+	{
+		delete fMessage;
+	}
+
+	void SetTarget(BHandler* target)
+	{
+		fTarget = BMessenger(target);
+	}
+
+	virtual void Draw(BRect updateRect)
+	{
+		BRect bounds = Bounds();
+		rgb_color base = ui_color(B_CONTROL_BACKGROUND_COLOR);
+		rgb_color background = ui_color(B_PANEL_BACKGROUND_COLOR);
+		be_control_look->DrawButtonFrame(this, bounds, updateRect, base,
+			background, fPressedHalf != 0 ? BControlLook::B_ACTIVATED : 0);
+		be_control_look->DrawButtonBackground(this, bounds, updateRect, base,
+			fPressedHalf != 0 ? BControlLook::B_ACTIVATED : 0);
+
+		SetHighColor(ui_color(B_CONTROL_TEXT_COLOR));
+		SetPenSize(1);
+		float middleY = floorf((bounds.top + bounds.bottom) / 2);
+		// A 9-pixel minus and plus with a pixel between them.
+		float arm = 4;
+		float minusX = floorf((bounds.left + bounds.right) / 2) - 5;
+		float plusX = minusX + 10;
+		StrokeLine(BPoint(minusX - arm, middleY), BPoint(minusX + arm, middleY));
+		StrokeLine(BPoint(plusX - arm, middleY), BPoint(plusX + arm, middleY));
+		StrokeLine(BPoint(plusX, middleY - arm), BPoint(plusX, middleY + arm));
+	}
+
+	virtual void MouseDown(BPoint where)
+	{
+		fPressedHalf = where.x < Bounds().Width() / 2 ? -1 : 1;
+		Invalidate();
+		SetMouseEventMask(B_POINTER_EVENTS, B_LOCK_WINDOW_FOCUS);
+		BMessage message(*fMessage);
+		message.AddInt32("delta", fPressedHalf);
+		fTarget.SendMessage(&message);
+	}
+
+	virtual void MouseUp(BPoint where)
+	{
+		fPressedHalf = 0;
+		Invalidate();
+	}
+
+private:
+	BMessage*	fMessage;
+	BMessenger	fTarget;
+	int32		fPressedHalf;
 };
 
 
@@ -193,17 +279,21 @@ ToolBox::ToolIconName(tool_id tool)
 
 ToolBox::ToolBox()
 	:
-	BGroupView("toolbox", B_VERTICAL, B_USE_SMALL_SPACING)
+	BGroupView("toolbox", B_VERTICAL, 0)
 {
-	GroupLayout()->SetInsets(B_USE_SMALL_SPACING);
+	// Sizes follow the Qt version on Haiku: 28-pixel buttons, 6 pixels
+	// apart, in two columns.
+	GroupLayout()->SetInsets(5, 5, 4, 5);
 
-	// The grid has to be in this view's layout before buttons go into it,
+	// The grid has to be in this view's layout before views go into it,
 	// or they never become child views.
 	BGridLayout* grid;
 	BLayoutBuilder::Group<>(this)
-		.AddGrid(2, 2)
+		.AddGrid(6, 6)
 			.GetLayout(&grid)
-			.End();
+			.End()
+		.AddGlue();
+
 	for (int32 i = 0; i < TOOL_COUNT; i++) {
 		BMessage* message = new BMessage(MSG_SET_TOOL);
 		message->AddInt32("tool", i);
@@ -215,39 +305,35 @@ ToolBox::ToolBox()
 		} else
 			button->SetLabel(ToolLabel((tool_id)i));
 		button->SetBehavior(BButton::B_TOGGLE_BEHAVIOR);
-		button->SetFlat(true);
+		button->SetExplicitSize(BSize(kToolButtonSize - 1,
+			kToolButtonSize - 1));
 		button->SetToolTip(ToolLabel((tool_id)i));
 		fButtons[i] = button;
 		grid->AddView(button, i % 2, i / 2);
 	}
 
+	int32 row = (TOOL_COUNT + 1) / 2;
+	BSeparatorView* separator = new BSeparatorView(B_HORIZONTAL);
+	separator->SetExplicitMinSize(BSize(B_SIZE_UNSET, 4));
+	grid->AddView(separator, 0, row++, 2, 1);
+
 	fPrimary = new ColorSwatch(ColorSwatch::SWATCH_PRIMARY,
-		gSettings->PrimaryColor(), 28);
+		gSettings->PrimaryColor(), kToolButtonSize);
 	fSecondary = new ColorSwatch(ColorSwatch::SWATCH_SECONDARY,
-		gSettings->SecondaryColor(), 28);
+		gSettings->SecondaryColor(), kToolButtonSize);
+	grid->AddView(fPrimary, 0, row);
+	grid->AddView(fSecondary, 1, row++);
 
-	fPenMenu = new BPopUpMenu("pen");
-	for (int32 size : kPenSizes) {
-		BMessage* message = new BMessage(MSG_PEN_SIZE);
-		message->AddInt32("size", size);
-		BString label;
-		label << size;
-		fPenMenu->AddItem(new BMenuItem(label.String(), message));
-	}
-	fPenField = new BMenuField("penSize", NULL, fPenMenu);
+	fPenField = new NumberControl("penSize", NULL, 1, kMaxPenSize,
+		gSettings->PenSize(), new BMessage(MSG_PEN_FIELD));
+	fPenField->SetExplicitSize(BSize(35, B_SIZE_UNSET));
 	fPenField->SetToolTip(B_TRANSLATE("Pen size"));
-
-	BLayoutBuilder::Group<>(this)
-		.Add(new BSeparatorView(B_HORIZONTAL))
-		.AddGroup(B_HORIZONTAL, B_USE_SMALL_SPACING)
-			.AddGlue()
-			.Add(fPrimary)
-			.Add(fSecondary)
-			.AddGlue()
-			.End()
-		.Add(new BStringView("penLabel", B_TRANSLATE("Pen size:")))
+	fPenStepper = new StepperButton(new BMessage(MSG_PEN_STEP));
+	fPenStepper->SetToolTip(B_TRANSLATE("Pen size"));
+	BGroupLayout* penRow = BLayoutBuilder::Group<>(B_HORIZONTAL, 2)
 		.Add(fPenField)
-		.AddGlue();
+		.Add(fPenStepper);
+	grid->AddItem(penRow, 0, row, 2, 1);
 }
 
 
@@ -257,8 +343,33 @@ ToolBox::AttachedToWindow()
 	BGroupView::AttachedToWindow();
 	for (int32 i = 0; i < TOOL_COUNT; i++)
 		fButtons[i]->SetTarget(be_app);
-	fPenMenu->SetTargetForItems(be_app);
+	fPenField->SetTarget(this);
+	fPenStepper->SetTarget(this);
 	Update();
+}
+
+
+void
+ToolBox::MessageReceived(BMessage* message)
+{
+	switch (message->what) {
+		case MSG_PEN_FIELD:
+		case MSG_PEN_STEP:
+		{
+			int32 size = message->what == MSG_PEN_FIELD
+				? fPenField->Number()
+				: gSettings->PenSize() + message->GetInt32("delta", 0);
+			size = std::min(std::max(size, (int32)1), kMaxPenSize);
+			if (size == gSettings->PenSize())
+				break;
+			BMessage setSize(MSG_PEN_SIZE);
+			setSize.AddInt32("size", size);
+			be_app->PostMessage(&setSize);
+			break;
+		}
+		default:
+			BGroupView::MessageReceived(message);
+	}
 }
 
 
@@ -272,13 +383,10 @@ ToolBox::Update()
 	fPrimary->SetColor(gSettings->PrimaryColor());
 	fSecondary->SetColor(gSettings->SecondaryColor());
 
-	BString label;
-	label << gSettings->PenSize();
-	BMenuItem* item = fPenMenu->FindItem(label.String());
-	if (item != NULL)
-		item->SetMarked(true);
-	else
-		fPenField->MenuItem()->SetLabel(label.String());
+	// Leave the field alone while it's being typed into.
+	int32 size = gSettings->PenSize();
+	if (fPenField->Number() != size && !fPenField->TextView()->IsFocus())
+		fPenField->SetNumber(size);
 }
 
 
@@ -300,9 +408,9 @@ static const rgb_color kPalette[] = {
 
 PaletteBar::PaletteBar()
 	:
-	BGroupView("palette", B_HORIZONTAL, 2)
+	BGroupView("palette", B_HORIZONTAL, 12)
 {
-	GroupLayout()->SetInsets(B_USE_SMALL_SPACING, 2, B_USE_SMALL_SPACING, 2);
+	GroupLayout()->SetInsets(6, 7, 6, 6);
 	for (const rgb_color& color : kPalette) {
 		GroupLayout()->AddView(new ColorSwatch(ColorSwatch::SWATCH_PALETTE,
 			color, 20));

@@ -17,8 +17,8 @@
 
 
 class BButton;
-class BMenuField;
-class BPopUpMenu;
+class NumberControl;
+class StepperButton;
 
 
 class ColorSwatch : public BView {
@@ -54,14 +54,15 @@ public:
 	static	const char*			ToolIconName(tool_id tool);
 
 	virtual	void				AttachedToWindow();
+	virtual	void				MessageReceived(BMessage* message);
 			void				Update();
 
 private:
 			BButton*			fButtons[TOOL_COUNT];
 			ColorSwatch*		fPrimary;
 			ColorSwatch*		fSecondary;
-			BPopUpMenu*			fPenMenu;
-			BMenuField*			fPenField;
+			NumberControl*		fPenField;
+			StepperButton*		fPenStepper;
 };
 
 
